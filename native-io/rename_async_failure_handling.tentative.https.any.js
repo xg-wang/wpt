@@ -10,6 +10,8 @@ setup(async () => {
 });
 
 promise_test(async testCase => {
+  await reserveAndCleanupCapacity(testCase);
+
   const file1 = await nativeIO.open('test_file_1');
   const file2 = await nativeIO.open('test_file_2');
   testCase.add_cleanup(async () => {
@@ -63,6 +65,8 @@ promise_test(async testCase => {
 }, 'nativeIO.rename does not overwrite an existing file.');
 
 promise_test(async testCase => {
+  await reserveAndCleanupCapacity(testCase);
+
   const file = await nativeIO.open('test_file');
   testCase.add_cleanup(async () => {
     await file.close();
@@ -79,6 +83,8 @@ promise_test(async testCase => {
 }, 'nativeIO.rename does not allow renaming an open file.');
 
 promise_test(async testCase => {
+  await reserveAndCleanupCapacity(testCase);
+
   testCase.add_cleanup(async () => {
     await file.close();
     await nativeIO.delete('test_file');
@@ -98,6 +104,8 @@ promise_test(async testCase => {
 }, 'nativeIO.rename does not allow renaming from or to invalid names.');
 
 promise_test(async testCase => {
+  await reserveAndCleanupCapacity(testCase);
+
   const closed_file = await nativeIO.open('closed_file');
   closed_file.close();
   const opened_file = await nativeIO.open('opened_file');
@@ -119,6 +127,8 @@ promise_test(async testCase => {
 }, 'Failed nativeIO.rename does not unlock the source.');
 
 promise_test(async testCase => {
+  await reserveAndCleanupCapacity(testCase);
+
   const closed_file = await nativeIO.open('closed_file');
   await closed_file.close();
   const opened_file = await nativeIO.open('opened_file');
@@ -140,6 +150,8 @@ promise_test(async testCase => {
 }, 'Failed nativeIO.rename does not unlock the destination.');
 
 promise_test(async testCase => {
+  await reserveAndCleanupCapacity(testCase);
+
   // Make sure that the file does not exist.
   await nativeIO.delete('does_not_exist');
   testCase.add_cleanup(async () => {
