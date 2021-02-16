@@ -19,7 +19,12 @@ function import_test(testCase) {
       { scope: testCase.scriptURL, type: 'module' });
     registration.installing.postMessage(
       'Send message for tests from main script.');
-    const msgEvent = await msgPromise;
+    var msgEvent = await msgPromise;
+    assert_array_equals(msgEvent.data, testCase.expectation);
+    await registration.update();
+    const worker = registration.installing ? registration.installing : registration.active;
+    worker.postMessage('Send message for tests from main script.');
+    msgEvent = await msgPromise;
     assert_array_equals(msgEvent.data, testCase.expectation);
   }, testCase.description);
 }
