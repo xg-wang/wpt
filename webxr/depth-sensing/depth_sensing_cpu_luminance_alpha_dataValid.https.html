@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="../resources/webxr_util.js"></script>
+<script src="../resources/webxr_test_asserts.js"></script>
+<script src="../resources/webxr_test_constants.js"></script>
+<script src="../resources/webxr_test_constants_fake_depth.js"></script>
+
+<script>
+
+const fakeDeviceInitParams = {
+  supportedModes: ["immersive-ar"],
+  views: VALID_VIEWS,
+  supportedFeatures: ALL_FEATURES,
+};
+
+const assert_depth_valid_at = function(depthInformation, r, c, dr, dc) {
+  // c and r correspond to the depth buffer coordinates,
+  // *not* to normalized view coordinates the getDepthInMeters() expects.
+
+  const expectedValue = getExpectedValueAt(c, r);
+
+  // 1. Normalize:
+  let x = (c + dc) / depthSensingBufferWidth;
+  let y = (r + dr) / depthSensingBufferHeight;
+
+  // 2. Apply the transform that changes the origin and axes:
+  x = 1.0 - x;
+  y = 1.0 - y;
+
+  const depthValue = depthInformation.getDepthInMeters(x, y);
+  assert_approx_equals(depthValue, expectedValue, FLOAT_EPSILON,
+                        "Depth value at (" + c + "," + r + "), deltas=(" + dc + ", " + dr + "), "
+                        + "coordinates (" + x + "," + y + ") must match!");
+}
+
+const assert_depth_valid = function(depthInformation) {
+  const x_resolution = 1/depthSensingBufferWidth;
+
+  for(let row = 0; row < depthSensingBufferHeight; row++) {
+    for(let column = 0; column < depthSensingBufferWidth; column++) {
+      // middle of the pixel:
+      assert_depth_valid_at(depthInformation, row, column, 0.5, 0.5);
+
+      // corners of the pixel:
+      assert_depth_valid_at(depthInformation, row, column, FLOAT_EPSILON, FLOAT_EPSILON);
+      assert_depth_valid_at(depthInformation, row, column, FLOAT_EPSILON, 1 - FLOAT_EPSILON);
+      assert_depth_valid_at(depthInformation, row, column, 1 - FLOAT_EPSILON, FLOAT_EPSILON);
+      assert_depth_valid_at(depthInformation, row, column, 1 - FLOAT_EPSILON, 1 - FLOAT_EPSILON);
+    }
+  }
+
+  // Verify out-of-bounds accesses throw:
+  assert_throws_js(RangeError,
+                   () => depthInformation.getDepthInMeters(-FLOAT_EPSILON, 0.0),
+                   "getDepthInMeters() should throw when run with invalid indices - negative x");
+  assert_throws_js(RangeError,
+                   () => depthInformation.getDepthInMeters(0.0, -FLOAT_EPSILON),
+                   "getDepthInMeters() should throw when run with invalid indices - negative y");
+  assert_throws_js(RangeError,
+                   () => depthInformation.getDepthInMeters(1+FLOAT_EPSILON, 0.0),
+                   "getDepthInMeters() should throw when run with invalid indices - too big x");
+  assert_throws_js(RangeError,
+                   () => depthInformation.getDepthInMeters(0.0, 1+FLOAT_EPSILON),
+                   "getDepthInMeters() should throw when run with invalid indices - too big y");
+};
+
+const testCpuOptimizedLuminanceAlpha = function(session, fakeDeviceController, t) {
+  return session.requestReferenceSpace('viewer').then((viewerSpace) => {
+    let done = false;
+
+    const rafCallback = function(time, frame) {
+      const pose = frame.getViewerPose(viewerSpace);
+      if(pose) {
+        for(const view of pose.views) {
+          const depthInformation = frame.getDepthInformation(view);
+
+          t.step(() => {
+            assert_not_equals(depthInformation, null, "XRCPUDepthInformation must not be null!");
+          });
+
+          if(depthInformation) {
+            t.step(() => {
+              assert_depth_valid(depthInformation);
+            });
+          }
+        }
+      }
+
+      done = true;
+    };
+
+    session.requestAnimationFrame(rafCallback);
+
+    return t.step_wait(() => done);
+  });
+};
+
+xr_session_promise_test("Ensures depth data is returned and values match expectation, cpu-optimized, luminance-alpha.",
+  testCpuOptimizedLuminanceAlpha,
+  Object.assign({}, fakeDeviceInitParams, { depthSensingData }),
+  'immersive-ar', {
+    'requiredFeatures': ['depth-sensing'],
+    depthSensing: {
+      usagePreference: ['cpu-optimized'],
+      dataFormatPreference: ['luminance-alpha'],
+    }
+  },
+  /*properties=*/null, /*glcontextPropertiesParam=*/null, /*gllayerPropertiesParam=*/null,
+  /*ignoreSessionCreationFailure=*/true);
+
+</script>

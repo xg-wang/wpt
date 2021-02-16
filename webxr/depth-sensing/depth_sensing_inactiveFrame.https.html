@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="../resources/webxr_util.js"></script>
+<script src="../resources/webxr_test_asserts.js"></script>
+<script src="../resources/webxr_test_constants.js"></script>
+<script src="../resources/webxr_test_constants_fake_depth.js"></script>
+
+<script>
+
+const fakeDeviceInitParams = {
+  supportedModes: ["immersive-ar"],
+  views: VALID_VIEWS,
+  supportedFeatures: ALL_FEATURES,
+};
+
+const testFunctionGenerator = function(isCpuOptimized) {
+  return (session, controller, t, sessionObjects) => {
+    return session.requestReferenceSpace('viewer').then((viewerSpace) => {
+      let callbacksKickedOff = false;
+      let callbackCounter = 0;
+
+      const glBinding = new XRWebGLBinding(session, sessionObjects.gl);
+
+      const rafCb = function(time, frame) {
+        const pose = frame.getViewerPose(viewerSpace);
+        for(const view of pose.views) {
+          const callback = () => {
+            t.step(() => {
+              assert_throws_dom("InvalidStateError",
+                                () => isCpuOptimized ? frame.getDepthInformation(view)
+                                                     : glBinding.getDepthInformation(view),
+                                "getDepthInformation() should throw when ran outside RAF");
+            });
+            callbackCounter--;
+          }
+
+          step_timeout(callback, 10);
+          callbackCounter++;
+        }
+
+        callbacksKickedOff = true;
+      };
+
+      session.requestAnimationFrame(rafCb);
+
+      return t.step_wait(() => callbacksKickedOff && (callbackCounter == 0));
+    });
+  };
+};
+
+xr_session_promise_test("Ensures getDepthInformation() throws when not run in an active frame, `cpu-optimized`",
+  testFunctionGenerator(/*isCpuOptimized=*/true),
+  fakeDeviceInitParams,
+  'immersive-ar', {
+    requiredFeatures: ['depth-sensing'],
+    depthSensing: {
+      usagePreference: ['cpu-optimized'],
+      dataFormatPreference: ['luminance-alpha', 'float32'],
+    }
+  },
+  /*properties=*/null, /*glcontextPropertiesParam=*/null, /*gllayerPropertiesParam=*/null,
+  /*ignoreSessionCreationFailure=*/true);
+
+xr_session_promise_test("Ensures getDepthInformation() throws when not run in an active frame, `gpu-optimized`",
+  testFunctionGenerator(/*isCpuOptimized=*/false),
+  fakeDeviceInitParams,
+  'immersive-ar', {
+    requiredFeatures: ['depth-sensing'],
+    depthSensing: {
+      usagePreference: ['gpu-optimized'],
+      dataFormatPreference: ['luminance-alpha', 'float32'],
+    }
+  },
+  /*properties=*/null, /*glcontextPropertiesParam=*/null, /*gllayerPropertiesParam=*/null,
+  /*ignoreSessionCreationFailure=*/true);
+
+</script>
